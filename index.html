@@ -3,987 +3,307 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SINTH — The data layer behind the chef's hand</title>
+<title>SINTH — The data behind the chef's hands</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Fragment+Mono&display=swap" rel="stylesheet">
 <style>
-  /* ===== Tokens ===== */
-  :root {
-    --ink:           #0F1418;
-    --ink-soft:      #1B232B;       /* dark section background */
-    --ink-deep:      #131A21;       /* deeper accent on dark */
-    --canvas:        #F2F4F6;       /* light section background */
-    --canvas-warm:   #E8ECEF;       /* alt light */
-    --steel:         #ACB5C2;       /* the hero accent */
-    --steel-soft:    #C8D1DB;
-    --steel-deep:    #6E7782;
-    --hairline:      #D4D9DF;
-    --hairline-dark: #2D353F;
-    --body:          #3A3F45;
-    --body-soft:     #6E7782;
-    --label:         #8A8D91;
-    --white:         #FFFFFF;
+@font-face { font-family:'Moderniz'; src:url('fonts/Moderniz.otf') format('opentype'); font-weight:400; font-style:normal; font-display:swap; }
 
-    --gutter: clamp(20px, 4vw, 64px);
-    --max:    1280px;
+:root{
+  --paper:#FAFAFB; --ink:#0B0B0E; --grey:#85888F; --grey-soft:#A6A9AE; --grey-wash:#F1F1F3; --tape:#2A97FE;
+  --radius-structural:0; --radius-chip:20px; --radius-nav:2px;
+  --wordmark-tracking:0.08em;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --paper:#101114; --ink:#F3F4F6; --grey:#9A9DA6; --grey-soft:#4A4D54; --grey-wash:#17181C; }
+}
+:root[data-theme="dark"]{ --paper:#101114; --ink:#F3F4F6; --grey:#9A9DA6; --grey-soft:#4A4D54; --grey-wash:#17181C; }
+:root[data-theme="light"]{ --paper:#FAFAFB; --ink:#0B0B0E; --grey:#85888F; --grey-soft:#A6A9AE; --grey-wash:#F1F1F3; }
 
-    --font-sans: 'Inter', system-ui, -apple-system, 'Helvetica Neue', sans-serif;
-    --font-mono: 'IBM Plex Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
-  }
+/* system rule: scrollbars are always tape blue, thin, square */
+*{ scrollbar-width:thin; scrollbar-color:var(--tape) transparent; }
+::-webkit-scrollbar{ width:8px; height:8px; }
+::-webkit-scrollbar-track{ background:transparent; }
+::-webkit-scrollbar-thumb{ background:var(--tape); border-radius:0; }
+:root{
+  --maxw:1180px;
+  --gut:clamp(20px,5vw,72px);
+  --hero-size:clamp(36px,8.2vw,130px);
+  --nav-size-small:clamp(26px,3.4vw,44px);
+}
 
-  /* ===== Base ===== */
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
-  body {
-    font-family: var(--font-sans);
-    background: var(--canvas);
-    color: var(--ink);
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    line-height: 1.4;
-  }
-  a { color: inherit; text-decoration: none; }
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'Inter', system-ui, sans-serif;
+  font-size:16px;
+  line-height:1.5;
+  font-weight:400;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+  /* clears the fixed scroll bar at the bottom — same formula as its height (min(1.45vw,18px)),
+     so the footer never sits underneath it at any viewport width */
+  padding-bottom:min(1.45vw,18px);
+}
+a{color:inherit; text-decoration:none;}
+.mono{ font-family:'Fragment Mono', ui-monospace, monospace; }
+.wordmark{
+  font-family:'Moderniz', system-ui, sans-serif;
+  letter-spacing:var(--wordmark-tracking);
+  font-weight:400;
+  text-transform:uppercase;
+}
+.wrap{max-width:var(--maxw); margin:0 auto; padding:0 var(--gut);}
+.rule{height:1px; background:var(--grey-soft); border:0; margin:0; width:100%;}
+h1,h2,h3{ text-wrap:balance; margin:0; font-weight:400; }
 
-  /* Spec-sheet rulers at viewport edges */
-  body::before,
-  body::after {
-    content: "";
-    position: fixed;
-    top: 0;
-    bottom: 0;
-    width: 12px;
-    pointer-events: none;
-    z-index: 100;
-    background-image:
-      linear-gradient(to bottom, transparent 0, transparent 23px, rgba(15,20,24,.18) 23px, rgba(15,20,24,.18) 24px, transparent 24px),
-      linear-gradient(to bottom, transparent 0, transparent 47px, rgba(15,20,24,.10) 47px, rgba(15,20,24,.10) 48px, transparent 48px);
-    background-size: 12px 24px, 12px 48px;
-  }
-  body::before { left: 0;  border-right: 1px solid rgba(15,20,24,.12); }
-  body::after  { right: 0; border-left:  1px solid rgba(15,20,24,.12); }
+/* scroll progress = the tape, doing double duty. Locked at 1:4 against the tape's own
+   height — not a fixed px value, so the ratio holds at every viewport width. */
+#tape-progress{
+  position:fixed; bottom:0; left:0; height:min(1.45vw,18px); width:0%;
+  background:var(--tape); z-index:100;
+  transition:width .08s linear;
+}
+@media (prefers-reduced-motion:reduce){ #tape-progress{ transition:none; } }
+#tape-track{ position:fixed; bottom:0; left:0; right:0; height:min(1.45vw,18px); background:var(--grey-soft); z-index:99; }
 
-  /* On dark sections we re-render the rulers in light mode */
-  .dark { position: relative; }
-  .dark::before,
-  .dark::after {
-    content: "";
-    position: absolute;
-    top: 0; bottom: 0;
-    width: 12px;
-    pointer-events: none;
-    z-index: 5;
-    background-image:
-      linear-gradient(to bottom, transparent 0, transparent 23px, rgba(255,255,255,.18) 23px, rgba(255,255,255,.18) 24px, transparent 24px),
-      linear-gradient(to bottom, transparent 0, transparent 47px, rgba(255,255,255,.08) 47px, rgba(255,255,255,.08) 48px, transparent 48px);
-    background-size: 12px 24px, 12px 48px;
-  }
-  .dark::before { left: 0;  border-right: 1px solid rgba(255,255,255,.12); }
-  .dark::after  { right: 0; border-left:  1px solid rgba(255,255,255,.12); }
+/* nav — sticky, with the tape as its own bottom edge. This is the page's one tape:
+   it doesn't repeat further down, it travels with the header instead. */
+.site-header{ position:sticky; top:0; z-index:50; background:var(--paper); }
+nav.top{ padding:22px 0 18px; display:flex; align-items:center; justify-content:space-between; gap:24px; margin-top:4px; }
+nav.top .wordmark{ font-size:var(--nav-size-small); line-height:1; }
+nav.top ul{ list-style:none; display:flex; gap:28px; margin:0; padding:0; }
+nav.top a.mono{ font-size:12px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink); opacity:.7; }
+nav.top a.mono:hover{ opacity:1; }
+@media (max-width:640px){ nav.top ul{ display:none; } }
 
-  /* Container */
-  .wrap {
-    max-width: var(--max);
-    margin: 0 auto;
-    padding-left: var(--gutter);
-    padding-right: var(--gutter);
-    position: relative;
-  }
+/* chef doorway — a separate flex child from the nav list, so it survives the
+   mobile collapse above: wordmark and pill still space-between to opposite
+   corners once the pitch nav links disappear. Not a second tape: outline only,
+   never a solid fill, so it reads as an accent, not a repeat of the tape device. */
+.chef-pill{ font-family:'Fragment Mono',monospace; font-size:12px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink); border:1.5px solid var(--tape); border-radius:var(--radius-chip); padding:7px 16px; white-space:nowrap; transition:background .12s,color .12s; }
+.chef-pill:hover{ background:var(--tape); color:var(--paper); }
 
-  /* ===== Nav ===== */
-  nav.top {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    background: rgba(242,244,246,.86);
-    backdrop-filter: saturate(140%) blur(10px);
-    -webkit-backdrop-filter: saturate(140%) blur(10px);
-    border-bottom: 1px solid var(--hairline);
-  }
-  nav.top .wrap {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    align-items: center;
-    height: 64px;
-    gap: 24px;
-  }
-  .brand {
-    font-weight: 800;
-    font-size: 18px;
-    letter-spacing: -.01em;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--ink);
-  }
-  nav.top ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    justify-content: center;
-    gap: 36px;
-  }
-  nav.top ul a {
-    font-size: 14px;
-    color: var(--ink);
-    font-weight: 500;
-  }
-  nav.top ul a .car {
-    font-size: 9px;
-    color: var(--body-soft);
-    margin-left: 4px;
-  }
-  .pill {
-    font-family: var(--font-sans);
-    font-size: 13px;
-    font-weight: 500;
-    padding: 8px 16px;
-    border: 1px solid var(--hairline);
-    border-radius: 6px;
-    background: transparent;
-    color: var(--ink);
-    cursor: pointer;
-    line-height: 1;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .pill.solid {
-    background: var(--steel);
-    border-color: var(--steel);
-    color: var(--ink);
-  }
-  .pill.solid:hover { background: var(--steel-soft); }
+/* hero — the sticky header (nav + tape) sits above this, full-bleed, so hero content
+   gets its own comfortable padding rather than sitting flush against anything. */
+.hero-frame{ padding-top:clamp(48px,8vh,96px); padding-bottom:56px; }
+.hero{ padding:0; }
+.hero .mark-line{ margin-bottom:56px; }
+.hero .mark-line .wordmark{ font-size:clamp(40px,9vw,110px); line-height:1; display:block; }
+.hero h1{ font-size:var(--hero-size); line-height:1.02; max-width:none; }
+.hero .lede{ margin-top:30px; max-width:none; font-size:18px; opacity:.8; }
+.hero .cta{ margin-top:34px; display:inline-flex; align-items:center; gap:10px; font-family:'Fragment Mono',monospace; font-size:13px; letter-spacing:.04em; text-transform:uppercase; border-bottom:1px solid var(--ink); padding-bottom:4px; }
 
-  /* ===== Section base ===== */
-  section { position: relative; padding: clamp(80px, 10vw, 160px) 0; }
-  section.dark { background: var(--ink-soft); color: var(--white); }
-  section.tight { padding: clamp(48px, 6vw, 96px) 0; }
+/* the tape: left-anchored to the true edge, 10:1, locked. Appears once, in the sticky header. */
+.tape-band{ background:var(--tape); margin:0; }
+.tape-10{ aspect-ratio:10/1; width:min(58vw,720px); }
 
-  /* ===== Hero ===== */
-  .hero { padding-top: clamp(60px, 8vw, 100px); padding-bottom: clamp(60px, 8vw, 120px); }
-  .hero h1 {
-    font-family: var(--font-sans);
-    font-weight: 800;
-    font-size: clamp(48px, 7.6vw, 110px);
-    line-height: .96;
-    letter-spacing: -.035em;
-    margin: 0 0 24px;
-    max-width: 16ch;
-  }
-  .hero .lede {
-    font-size: clamp(16px, 1.2vw, 18px);
-    color: var(--body);
-    max-width: 52ch;
-    margin: 0;
-  }
-  .hero-grid {
-    position: relative;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 64px;
-    align-items: center;
-  }
-  .hero-floats {
-    position: relative;
-    min-height: 360px;
-  }
-  .float-card {
-    position: absolute;
-    background: var(--canvas-warm);
-    border: 1px solid var(--hairline);
-    padding: 12px 14px 14px;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--body);
-    min-width: 200px;
-    border-radius: 2px;
-  }
-  .float-card .l {
-    font-size: 10px;
-    color: var(--body-soft);
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    margin-bottom: 6px;
-  }
-  .float-card.tile-a { top: 0; left: 4%; }
-  .float-card.tile-b { top: 70px; left: 28%; }
-  .float-card.tile-c { top: 40px; right: 4%; background: var(--ink); color: var(--white); border-color: var(--ink); }
-  .float-card.tile-c .l { color: var(--steel); }
-  .float-card.tile-d { bottom: 8px; left: 14%; }
-  .float-card.tile-e {
-    bottom: 30px; right: 8%;
-    background: var(--white); border-color: var(--hairline);
-    padding: 14px 16px;
-    display: grid;
-    grid-template-columns: 36px 1fr auto;
-    gap: 12px; align-items: center;
-    min-width: 280px;
-  }
-  .float-card.tile-e .icon {
-    width: 36px; height: 36px;
-    background: var(--ink-soft);
-    border-radius: 4px;
-    display: grid; place-items: center;
-    color: var(--steel);
-  }
-  .float-card.tile-e .name { font-family: var(--font-sans); font-size: 13px; font-weight: 600; color: var(--ink); }
-  .float-card.tile-e .meta { font-family: var(--font-mono); font-size: 10px; color: var(--body-soft); margin-top: 2px; }
-  .float-card.tile-e .val  { font-family: var(--font-sans); font-size: 16px; font-weight: 700; color: var(--ink); }
+section{ padding:64px 0; }
+.section-head{ display:flex; align-items:baseline; justify-content:space-between; gap:24px; padding-bottom:28px; flex-wrap:wrap; }
+.eyebrow{ font-family:'Fragment Mono',monospace; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--grey); }
+.section-head h2{ font-size:clamp(22px,2.8vw,32px); }
 
-  /* Hero sculpture */
-  .sculpture {
-    position: absolute;
-    right: -2%; top: 18%;
-    width: 320px; height: 320px;
-    pointer-events: none;
-    color: var(--ink);
-    opacity: .55;
-  }
+/* manifesto block */
+.manifesto{ border-top:1px solid var(--grey-soft); border-bottom:1px solid var(--grey-soft); padding:38px 0; }
+.manifesto p{ font-size:clamp(17px,2vw,21px); line-height:1.45; max-width:none; margin:0 0 17px; }
+.manifesto p:last-child{ margin-bottom:0; }
+.manifesto .aside{ font-style:normal; }
+.manifesto .signoff{ font-size:clamp(19px,2.4vw,26px); font-weight:400; margin-top:28px; }
 
-  /* ===== Trust bar ===== */
-  .trust { padding: 64px 0 80px; text-align: center; }
-  .trust .line {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--body-soft);
-    letter-spacing: .04em;
-    margin-bottom: 28px;
-  }
-  .trust .logos {
-    display: flex; justify-content: space-between; align-items: center;
-    gap: 24px; flex-wrap: wrap;
-  }
-  .trust .logo-mark {
-    font-family: var(--font-sans);
-    font-weight: 700;
-    font-size: 18px;
-    color: var(--body-soft);
-    opacity: .55;
-    letter-spacing: -.01em;
-  }
+/* two column rows */
+.row{ display:grid; grid-template-columns:minmax(160px,320px) 1fr; gap:24px; padding:22px 0; border-top:1px solid var(--grey-soft); }
+.row:last-child{ border-bottom:1px solid var(--grey-soft); }
+.row .label{ font-size:16px; font-weight:400; }
+.row .content{ font-size:16px; opacity:.85; }
+@media (max-width:640px){ .row{ grid-template-columns:1fr; gap:10px; } }
 
-  /* ===== Dark statement ===== */
-  .statement { padding: clamp(120px, 14vw, 200px) 0; position: relative; overflow: hidden; }
-  .statement h2 {
-    font-family: var(--font-sans);
-    font-weight: 700;
-    font-size: clamp(36px, 5.2vw, 76px);
-    line-height: 1.04;
-    letter-spacing: -.025em;
-    text-align: center;
-    max-width: 22ch;
-    margin: 0 auto;
-  }
-  .statement h2 .accent { color: var(--steel); }
-  .statement .surround { position: relative; min-height: 0; }
-  .surround .float-card {
-    background: transparent;
-    color: rgba(255,255,255,.62);
-    border-color: rgba(255,255,255,.18);
-  }
-  .surround .float-card .l { color: rgba(255,255,255,.45); }
-  .surround .float-card.solid {
-    background: var(--white);
-    color: var(--ink);
-    border-color: var(--white);
-  }
-  .surround .float-card.solid .l { color: var(--body-soft); }
-  .surround .pos { position: absolute; }
-  .pos.s1 { top: -80px; left: 8%; }
-  .pos.s2 { top: -40px; right: 6%; }
-  .pos.s3 { top: 20px; left: 4%; }
-  .pos.s4 { bottom: -100px; left: 18%; }
-  .pos.s5 { bottom: -40px; right: 12%; }
-  .pos.s6 { bottom: -120px; right: 4%; }
+/* craft vs person */
+.split{ display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--grey-soft); margin-top:8px; }
+@media (max-width:720px){ .split{ grid-template-columns:1fr; } }
+.split-col{ background:var(--paper); padding:28px 26px; }
+.split-col .st{ font-family:'Fragment Mono',monospace; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin-bottom:16px; }
+.split-col ul{ list-style:none; margin:0; padding:0; }
+.split-col li{ padding:10px 0; border-top:1px solid var(--grey-soft); font-size:16px; }
+.split-col li:first-of-type{ border-top:none; }
+.split-col.craft .st{ color:var(--tape); }
 
-  /* ===== Capability header ===== */
-  .cap-header { padding: clamp(120px, 12vw, 180px) 0 60px; }
-  .cap-header h2 {
-    font-family: var(--font-sans);
-    font-weight: 700;
-    font-size: clamp(36px, 5vw, 72px);
-    line-height: 1.02;
-    letter-spacing: -.025em;
-    margin: 0;
-    max-width: 18ch;
-  }
-  .cap-header .eyebrow {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: .14em;
-    color: var(--body-soft);
-    text-transform: uppercase;
-    margin-bottom: 24px;
-    display: flex; align-items: center; gap: 8px;
-  }
-  .cap-header .eyebrow::before {
-    content: "►"; color: var(--steel-deep);
-  }
+/* photography — practice imagery, grayscale enforced regardless of source */
+.photo-grid{ display:grid; grid-template-columns:1.4fr 1fr; gap:2px; margin-top:8px; }
+@media (max-width:720px){ .photo-grid{ grid-template-columns:1fr; } }
+.photo-block{ position:relative; background:var(--grey-wash); aspect-ratio:4/3; overflow:hidden; display:flex; align-items:flex-end; padding:12px; }
+.photo-block img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; filter:grayscale(1) contrast(1.05); }
+.photo-block .cap{ position:relative; font-family:'Fragment Mono',monospace; font-size:11px; color:var(--ink); letter-spacing:.02em; background:var(--paper); padding:3px 8px; }
 
-  /* ===== Capability sections ===== */
-  .cap {
-    padding: clamp(60px, 8vw, 120px) 0;
-    border-top: 1px solid var(--hairline);
-  }
-  .cap-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 64px;
-    align-items: center;
-  }
-  .cap.alt .cap-grid { direction: rtl; }
-  .cap.alt .cap-grid > * { direction: ltr; }
-  .cap .tag {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: .14em;
-    color: var(--body-soft);
-    text-transform: uppercase;
-    margin-bottom: 20px;
-    display: flex; align-items: center; gap: 8px;
-  }
-  .cap .tag::before { content: "["; color: var(--body-soft); }
-  .cap .tag::after  { content: "]"; color: var(--body-soft); }
-  .cap h3 {
-    font-family: var(--font-sans);
-    font-weight: 700;
-    font-size: clamp(32px, 3.6vw, 52px);
-    line-height: 1.04;
-    letter-spacing: -.022em;
-    margin: 0 0 20px;
-    max-width: 14ch;
-  }
-  .cap p {
-    font-size: 16px;
-    color: var(--body);
-    max-width: 42ch;
-    margin: 0 0 28px;
-  }
-  .cap .more {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--ink);
-    border: 1px solid var(--hairline);
-    padding: 8px 12px;
-  }
-  .cap .more::before { content: "►"; color: var(--steel-deep); font-size: 9px; }
+/* full-bleed image band */
+.image-band{ position:relative; height:clamp(280px,50vh,560px); overflow:hidden; margin:40px 0; }
+.image-band img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center 30%; filter:grayscale(1) contrast(1.05); }
 
-  .cap-visual {
-    background: var(--canvas-warm);
-    border: 1px solid var(--hairline);
-    aspect-ratio: 4 / 3;
-    position: relative;
-    overflow: hidden;
-  }
-  .cap-visual .placeholder {
-    position: absolute; inset: 0;
-    display: grid; place-items: center;
-    color: var(--body-soft);
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    text-align: center;
-    padding: 24px;
-  }
-  .cap-visual .corner-star {
-    position: absolute; bottom: 16px; right: 16px;
-    width: 18px; height: 18px;
-    color: var(--white);
-    filter: drop-shadow(0 0 6px rgba(0,0,0,.25));
-  }
-  .cap-visual .grid-bg {
-    position: absolute; inset: 0;
-    background-image:
-      linear-gradient(to right, rgba(15,20,24,.05) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(15,20,24,.05) 1px, transparent 1px);
-    background-size: 32px 32px;
-  }
-  .cap-visual img {
-    position: absolute; inset: 0;
-    width: 100%; height: 100%;
-    object-fit: cover;
-    display: block;
-  }
+/* line statement — no tape here; the page's one tape lives in the sticky header */
+.statement{ padding:clamp(48px,11vh,110px) 0 clamp(48px,11vh,110px); text-align:left; }
+.statement h2{ font-size:clamp(32px,7.5vw,110px); line-height:1.03; max-width:none; }
 
-  /* ===== Built for grid ===== */
-  .built {
-    padding: clamp(120px, 14vw, 200px) 0;
-    background: var(--canvas-warm);
-    border-top: 1px solid var(--hairline);
-    border-bottom: 1px solid var(--hairline);
-  }
-  .built h2 {
-    font-family: var(--font-sans);
-    font-weight: 700;
-    font-size: clamp(40px, 5.5vw, 80px);
-    line-height: 1.02;
-    letter-spacing: -.028em;
-    text-align: center;
-    margin: 0 auto 80px;
-    max-width: 14ch;
-  }
-  .built-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 48px;
-  }
-  .built-tile {
-    border: 1px dashed var(--hairline);
-    padding: 32px;
-    background: var(--canvas);
-    position: relative;
-  }
-  .built-tile .tag {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--body-soft);
-    letter-spacing: .14em;
-    text-transform: uppercase;
-    margin-bottom: 24px;
-  }
-  .built-tile .tag::before { content: "[ "; }
-  .built-tile .tag::after  { content: " ]"; }
-  .built-tile h3 {
-    font-family: var(--font-sans);
-    font-weight: 700;
-    font-size: 22px;
-    line-height: 1.16;
-    letter-spacing: -.018em;
-    margin: 0 0 12px;
-  }
-  .built-tile p {
-    font-size: 14px;
-    color: var(--body);
-    margin: 0 0 20px;
-  }
-  .built-tile .more {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--ink);
-    border-bottom: 1px solid var(--hairline);
-    padding-bottom: 2px;
-  }
-  .built-tile .more::before { content: "► "; color: var(--steel-deep); }
-
-  /* ===== Customer proof ===== */
-  .proof {
-    padding: clamp(120px, 14vw, 200px) 0;
-    background: var(--ink-deep);
-    color: var(--white);
-  }
-  .proof::before, .proof::after {
-    content: "";
-    position: absolute; top: 0; bottom: 0; width: 12px;
-    background-image:
-      linear-gradient(to bottom, transparent 0, transparent 23px, rgba(255,255,255,.18) 23px, rgba(255,255,255,.18) 24px, transparent 24px);
-    background-size: 12px 24px;
-    pointer-events: none;
-  }
-  .proof::before { left: 0; border-right: 1px solid rgba(255,255,255,.12); }
-  .proof::after  { right: 0; border-left:  1px solid rgba(255,255,255,.12); }
-  .proof-grid {
-    display: grid;
-    grid-template-columns: 1.6fr 1fr 1fr;
-    gap: 48px;
-    align-items: stretch;
-  }
-  .proof-quote {
-    background: var(--ink-soft);
-    border: 1px solid var(--hairline-dark);
-    padding: 40px;
-    position: relative;
-  }
-  .proof-quote blockquote {
-    font-family: var(--font-sans);
-    font-weight: 500;
-    font-size: clamp(22px, 2vw, 30px);
-    line-height: 1.22;
-    letter-spacing: -.018em;
-    margin: 0 0 32px;
-    color: var(--white);
-    max-width: 28ch;
-  }
-  .proof-quote .name {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: rgba(255,255,255,.7);
-    letter-spacing: .08em;
-  }
-  .proof-quote .role {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--steel);
-    letter-spacing: .08em;
-  }
-  .proof-quote .more {
-    position: absolute;
-    bottom: 32px; left: 40px;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--white);
-  }
-  .proof-quote .more::before { content: "► "; color: var(--steel); }
-  .proof-quote .partner {
-    position: absolute;
-    bottom: 32px; right: 32px;
-    font-family: var(--font-sans);
-    font-weight: 700;
-    font-size: 14px;
-    color: rgba(255,255,255,.55);
-    letter-spacing: .04em;
-  }
-
-  .stat {
-    padding: 32px;
-    border: 1px solid var(--hairline-dark);
-    display: flex; flex-direction: column; justify-content: space-between;
-    position: relative;
-  }
-  .stat .value {
-    font-family: var(--font-sans);
-    font-weight: 800;
-    font-size: clamp(48px, 5.6vw, 88px);
-    line-height: 1;
-    letter-spacing: -.03em;
-    color: var(--white);
-  }
-  .stat .label {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: rgba(255,255,255,.55);
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    line-height: 1.5;
-    max-width: 22ch;
-  }
-  .stat::before, .stat::after {
-    content: ""; position: absolute;
-    width: 14px; height: 14px;
-    border: 1px solid var(--steel);
-  }
-  .stat::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
-  .stat::after  { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
-
-  /* ===== Closing CTA ===== */
-  .closer {
-    padding: clamp(140px, 16vw, 220px) 0;
-    background: var(--ink-soft);
-    color: var(--white);
-    text-align: center;
-    position: relative;
-    overflow: hidden;
-  }
-  .closer h2 {
-    font-family: var(--font-sans);
-    font-weight: 700;
-    font-size: clamp(48px, 6.4vw, 96px);
-    line-height: 1.0;
-    letter-spacing: -.032em;
-    max-width: 16ch;
-    margin: 0 auto 40px;
-  }
-  .closer .pivot {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--steel);
-    letter-spacing: .14em;
-    text-transform: uppercase;
-    margin-bottom: 28px;
-  }
-  .closer .pivot::before { content: "► "; }
-  .closer .pill.solid { font-size: 14px; padding: 12px 22px; }
-  .closer .sculpture {
-    position: absolute;
-    left: 6%; top: 22%;
-    width: 240px; height: 240px;
-    color: var(--steel);
-    opacity: .35;
-    pointer-events: none;
-  }
-
-  /* ===== Footer ===== */
-  footer {
-    background: var(--ink);
-    color: rgba(255,255,255,.7);
-    padding: 80px 0 32px;
-  }
-  .foot-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr 1.6fr;
-    gap: 48px;
-    align-items: start;
-    margin-bottom: 64px;
-  }
-  .foot-col h4 {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--steel-deep);
-    letter-spacing: .14em;
-    text-transform: uppercase;
-    margin: 0 0 20px;
-    font-weight: 500;
-  }
-  .foot-col ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
-  .foot-col a { font-size: 14px; color: var(--white); }
-  .news label {
-    display: block;
-    font-family: var(--font-sans);
-    font-size: 14px;
-    color: var(--white);
-    margin-bottom: 16px;
-  }
-  .news .input {
-    display: grid;
-    grid-template-columns: 1fr 48px;
-    border: 1px dashed rgba(255,255,255,.3);
-  }
-  .news input {
-    background: transparent;
-    border: 0;
-    padding: 14px 16px;
-    color: var(--white);
-    font-family: var(--font-mono);
-    font-size: 13px;
-  }
-  .news input::placeholder { color: rgba(255,255,255,.4); }
-  .news input:focus { outline: none; }
-  .news button {
-    background: transparent;
-    border: 0;
-    border-left: 1px dashed rgba(255,255,255,.3);
-    color: var(--white);
-    cursor: pointer;
-    font-size: 16px;
-  }
-  .foot-bot {
-    display: flex; justify-content: space-between; align-items: center;
-    padding-top: 24px;
-    border-top: 1px solid var(--hairline-dark);
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: rgba(255,255,255,.5);
-    letter-spacing: .04em;
-  }
-  .foot-bot ul { list-style: none; padding: 0; margin: 0; display: flex; gap: 28px; }
-
-  /* ===== Responsive ===== */
-  @media (max-width: 900px) {
-    nav.top ul { display: none; }
-    .hero-grid { grid-template-columns: 1fr; }
-    .hero-floats { min-height: 460px; }
-    .sculpture { right: -8%; top: 0%; width: 220px; height: 220px; }
-    .cap-grid, .cap.alt .cap-grid { grid-template-columns: 1fr; direction: ltr; gap: 32px; }
-    .built-grid { grid-template-columns: 1fr; }
-    .proof-grid { grid-template-columns: 1fr; }
-    .foot-grid { grid-template-columns: 1fr 1fr; }
-    .foot-bot { flex-direction: column; gap: 12px; align-items: flex-start; }
-  }
+footer{ padding:38px 0 58px; }
+footer .foot-grid{ display:flex; justify-content:space-between; gap:24px; flex-wrap:wrap; padding-top:20px; }
+footer ul{ list-style:none; display:flex; gap:24px; margin:0; padding:0; }
+footer a.mono, footer .mono{ font-size:12px; color:var(--grey); letter-spacing:.03em; }
 </style>
 </head>
 <body>
 
-<!-- ============== NAV ============== -->
-<nav class="top">
+<div id="tape-track"></div>
+<div id="tape-progress"></div>
+
+<div class="site-header">
   <div class="wrap">
-    <a href="#" class="brand">
-      <svg viewBox="0 0 316 316" width="22" height="22" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M0 100C0 44.7715 44.7715 0 100 0V0V75C100 88.8071 88.8071 100 75 100H0V100Z"/><path d="M108 0H208V100H133C119.193 100 108 88.8071 108 75V0Z"/><path d="M108 133C108 119.193 119.193 108 133 108H208V183C208 196.807 196.807 208 183 208H108V133Z"/><path d="M216 108V108C271.228 108 316 152.772 316 208V208H241C227.193 208 216 196.807 216 183V108Z"/><path d="M216 241C216 227.193 227.193 216 241 216H316V216C316 271.228 271.228 316 216 316V316V241Z"/><path d="M108 216H183C196.807 216 208 227.193 208 241V316H108V216Z"/><path d="M216 0H316V75C316 88.8071 304.807 100 291 100H216V0Z"/><path d="M0 241C0 227.193 11.1929 216 25 216H100V316H0V241Z"/><path d="M0 108H75C88.8071 108 100 119.193 100 133V208V208C44.7715 208 0 163.228 0 108V108Z"/></svg>
-      SINTH
-    </a>
-    <ul>
-      <li><a href="#">Platform <span class="car">▼</span></a></li>
-      <li><a href="#">Kitchens</a></li>
-      <li><a href="#">Company <span class="car">▼</span></a></li>
-      <li><a href="#">Docs</a></li>
-    </ul>
-    <div><button class="pill">Contact sales</button></div>
-  </div>
-</nav>
-
-<!-- ============== HERO ============== -->
-<section class="hero">
-  <div class="wrap">
-    <div class="hero-grid">
-      <div>
-        <h1>The data layer behind the chef's hand.</h1>
-        <p class="lede">Sensors, vision, and a system that's always there — quietly turning the chef's menu into prep lists across every kitchen, learning how each one runs them, and keeping every service tight to the chef's standard.</p>
-      </div>
-      <div class="hero-floats">
-        <div class="float-card tile-a">
-          <div class="l">► STATION</div>
-          04 / GARDE MANGER<br>
-          STANDARD HOLD <span data-cycle="98,97,99,98">98</span>%
-        </div>
-        <div class="float-card tile-b">
-          <div class="l">► PREP YIELD</div>
-          142 COVERS / <span data-cycle="38,37,39,38">38</span>KG
-        </div>
-        <div class="float-card tile-c">
-          <div class="l">► CYCLE</div>
-          <span data-cycle="0.42,0.41,0.43,0.42">0.42</span>S / PLATE
-        </div>
-        <div class="float-card tile-d">
-          <div class="l">► STATION</div>
-          02 / SAUCIER<br>
-          PREP-AHEAD READY
-        </div>
-        <div class="float-card tile-e">
-          <div class="icon">
-            <svg viewBox="-12 -12 24 24" width="20" height="20"><path d="M 0 -10 L 2.4 -2.4 L 10 0 L 2.4 2.4 L 0 10 L -2.4 2.4 L -10 0 L -2.4 -2.4 Z" fill="currentColor"/></svg>
-          </div>
-          <div>
-            <div class="name">Beef Tartare</div>
-            <div class="meta">tue · 142 covers · standard 98%</div>
-          </div>
-          <div class="val">−<span data-cycle="04:32,04:18,04:41,04:29">04:32</span></div>
-        </div>
-
-        <!-- Wireframe sculpture -->
-        <svg class="sculpture" viewBox="0 0 320 320" fill="none" stroke="currentColor" stroke-width=".7">
-          <g transform="translate(160 160)">
-            <ellipse cx="0" cy="0" rx="120" ry="40"/>
-            <ellipse cx="0" cy="6"  rx="120" ry="40"/>
-            <ellipse cx="0" cy="12" rx="118" ry="40"/>
-            <ellipse cx="0" cy="18" rx="116" ry="38"/>
-            <ellipse cx="0" cy="24" rx="112" ry="36"/>
-            <ellipse cx="0" cy="30" rx="106" ry="34"/>
-            <ellipse cx="0" cy="36" rx="98"  ry="30"/>
-            <ellipse cx="0" cy="42" rx="86"  ry="26"/>
-            <ellipse cx="0" cy="48" rx="72"  ry="22"/>
-            <ellipse cx="0" cy="54" rx="56"  ry="18"/>
-            <ellipse cx="0" cy="60" rx="40"  ry="14"/>
-            <ellipse cx="0" cy="66" rx="24"  ry="10"/>
-            <ellipse cx="0" cy="-12" rx="120" ry="40"/>
-            <ellipse cx="0" cy="-24" rx="118" ry="40"/>
-            <ellipse cx="0" cy="-36" rx="112" ry="38"/>
-            <ellipse cx="0" cy="-48" rx="100" ry="34"/>
-            <ellipse cx="0" cy="-60" rx="84"  ry="28"/>
-            <ellipse cx="0" cy="-72" rx="62"  ry="22"/>
-            <ellipse cx="0" cy="-84" rx="36"  ry="14"/>
-          </g>
-        </svg>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============== DARK STATEMENT ============== -->
-<section class="statement dark">
-  <div class="wrap">
-    <div class="surround">
-      <div class="float-card pos s1">
-        <div class="l">► DISH</div>
-        TARTARE, BEEF<br>
-        STATION 04
-      </div>
-      <div class="float-card solid pos s2">
-        <div class="l">► STANDARD HOLD</div>
-        98% / 142 COVERS
-      </div>
-      <div class="float-card pos s3">
-        <div class="l">► STATION</div>
-        06 / PASTRY<br>
-        SHIFT 14:00
-      </div>
-      <div class="float-card pos s4">
-        <div class="l">► PREP TIME</div>
-        04:32 / 38KG YIELD
-      </div>
-      <div class="float-card solid pos s5">
-        <div class="l">► COVERS</div>
-        142 BOOKED · TUE PM
-      </div>
-      <div class="float-card pos s6">
-        <div class="l">► CATEGORY</div>
-        SOUS / GRILL
-      </div>
-
-      <h2>Until now, the chef's standard could only travel <span class="accent">as far as the chef could stand.</span></h2>
-    </div>
-  </div>
-</section>
-
-<!-- ============== CAPABILITY HEADER ============== -->
-<section class="cap-header">
-  <div class="wrap">
-    <div class="eyebrow">What SINTH does</div>
-    <h2>Plan the menu. Stand alongside the team. Decide on evidence.</h2>
-  </div>
-</section>
-
-<!-- ============== CAPABILITY 01 — PLAN ============== -->
-<section class="cap">
-  <div class="wrap">
-    <div class="cap-grid">
-      <div>
-        <div class="tag">PLAN</div>
-        <h3>The chef's menu, on the pass in every kitchen.</h3>
-        <p>Turn the chef's menu into prep lists across every kitchen, in minutes. Build once, ship everywhere. Update once, push to all. The planning side, finally fast.</p>
-        <a class="more" href="#">Learn more</a>
-      </div>
-      <div class="cap-visual">
-        <img src="images/plan-chef-writing-menu.avif" alt="Chef writing menu and prep notes at a stainless counter" loading="lazy">
-        <svg class="corner-star" viewBox="0 0 208 208" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M108 75C108 88.8071 119.193 100 133 100H208V108H133C119.193 108 108 119.193 108 133V208H100V133C100 119.193 88.8071 108 75 108H0V100H75C88.8071 100 100 88.8071 100 75V0H108V75Z"/></svg>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============== CAPABILITY 02 — STAND ============== -->
-<section class="cap alt">
-  <div class="wrap">
-    <div class="cap-grid">
-      <div>
-        <div class="tag">STAND</div>
-        <h3>A system that's always there, alongside the team.</h3>
-        <p>Sensors and vision in every prep area, working quietly in the background. On the food, never on the cooks — attending to the work, not the workers.</p>
-        <a class="more" href="#">Learn more</a>
-      </div>
-      <div class="cap-visual">
-        <img src="images/sensor-array-stainless-brigade.avif" alt="Sensor array detail in stainless brigade kitchen" loading="lazy">
-        <svg class="corner-star" viewBox="0 0 208 208" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M108 75C108 88.8071 119.193 100 133 100H208V108H133C119.193 108 108 119.193 108 133V208H100V133C100 119.193 88.8071 108 75 108H0V100H75C88.8071 100 100 88.8071 100 75V0H108V75Z"/></svg>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============== CAPABILITY 03 — DECIDE ============== -->
-<section class="cap">
-  <div class="wrap">
-    <div class="cap-grid">
-      <div>
-        <div class="tag">DECIDE</div>
-        <h3>Data behind the instinct.</h3>
-        <p>Prep times, labour load per dish, where each kitchen is fast and where it slips, what a new dish actually costs to produce. Tighter prep. Right-sized shifts. The decisions chefs have always made on feel, finally backed by evidence.</p>
-        <a class="more" href="#">Learn more</a>
-      </div>
-      <div class="cap-visual">
-        <img src="images/decide-analytics-moment.avif" alt="Analytics moment — chef reviewing data" loading="lazy">
-        <svg class="corner-star" viewBox="0 0 208 208" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M108 75C108 88.8071 119.193 100 133 100H208V108H133C119.193 108 108 119.193 108 133V208H100V133C100 119.193 88.8071 108 75 108H0V100H75C88.8071 100 100 88.8071 100 75V0H108V75Z"/></svg>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============== BUILT FOR ============== -->
-<section class="built">
-  <div class="wrap">
-    <h2>Built for every kitchen the chef runs.</h2>
-    <div class="built-grid">
-      <div class="built-tile">
-        <div class="tag">HOTEL GROUPS</div>
-        <h3>Standard, across every property.</h3>
-        <p>Roll the chef's menu out to every kitchen in the portfolio without losing a single beat between flagship and floor.</p>
-        <a class="more" href="#">Learn more</a>
-      </div>
-      <div class="built-tile">
-        <div class="tag">RESTAURANT OPERATORS</div>
-        <h3>One brigade, many rooms.</h3>
-        <p>Keep service tight to the chef's intent across every venue, with a system that learns each kitchen's tempo.</p>
-        <a class="more" href="#">Learn more</a>
-      </div>
-      <div class="built-tile">
-        <div class="tag">MULTI-VENUE F&amp;B</div>
-        <h3>The kitchen, finally caught up to the chef.</h3>
-        <p>The first system built so the chef's standard travels — sensors, vision, and the data that proves it shipped.</p>
-        <a class="more" href="#">Learn more</a>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============== CLOSING CTA ============== -->
-<section class="closer dark">
-  <svg class="sculpture" viewBox="0 0 240 240" fill="none" stroke="currentColor" stroke-width=".7">
-    <g transform="translate(120 120)">
-      <ellipse cx="0" cy="0" rx="100" ry="34"/>
-      <ellipse cx="0" cy="6"  rx="100" ry="34"/>
-      <ellipse cx="0" cy="12" rx="96" ry="32"/>
-      <ellipse cx="0" cy="18" rx="88" ry="28"/>
-      <ellipse cx="0" cy="24" rx="74" ry="24"/>
-      <ellipse cx="0" cy="30" rx="56" ry="18"/>
-      <ellipse cx="0" cy="36" rx="36" ry="12"/>
-      <ellipse cx="0" cy="-12" rx="100" ry="34"/>
-      <ellipse cx="0" cy="-24" rx="94" ry="32"/>
-      <ellipse cx="0" cy="-36" rx="80" ry="26"/>
-      <ellipse cx="0" cy="-48" rx="58" ry="20"/>
-      <ellipse cx="0" cy="-60" rx="32" ry="12"/>
-    </g>
-  </svg>
-  <div class="wrap">
-    <div class="pivot">If you run kitchens —</div>
-    <h2>Let's put SINTH in one of them.</h2>
-    <button class="pill solid">Contact sales</button>
-  </div>
-</section>
-
-<!-- ============== FOOTER ============== -->
-<footer>
-  <div class="wrap">
-    <div class="foot-grid">
-      <div class="foot-col">
-        <h4>Capabilities</h4>
-        <ul>
-          <li><a href="#">Plan</a></li>
-          <li><a href="#">Stand</a></li>
-          <li><a href="#">Decide</a></li>
-        </ul>
-      </div>
-      <div class="foot-col">
-        <h4>Kitchens</h4>
-        <ul>
-          <li><a href="#">Hotel groups</a></li>
-          <li><a href="#">Restaurant operators</a></li>
-          <li><a href="#">Multi-venue F&amp;B</a></li>
-        </ul>
-      </div>
-      <div class="foot-col">
-        <h4>Company</h4>
-        <ul>
-          <li><a href="#">About</a></li>
-          <li><a href="#">Careers</a></li>
-          <li><a href="#">Press</a></li>
-          <li><a href="#">Contact</a></li>
-        </ul>
-      </div>
-      <div class="foot-col news">
-        <label>Sign up for occasional notes from the pass</label>
-        <div class="input">
-          <input type="email" placeholder="Email address">
-          <button aria-label="Subscribe">→</button>
-        </div>
-      </div>
-    </div>
-    <div class="foot-bot">
-      <div>© SINTH 2026 — The data layer behind the chef's hand.</div>
+    <nav class="top">
+      <span class="wordmark">SINTH</span>
       <ul>
-        <li><a href="#">Terms</a></li>
-        <li><a href="#">Privacy</a></li>
-        <li><a href="#">Security</a></li>
+        <li><a class="mono" href="#refuse">Manifesto</a></li>
+        <li><a class="mono" href="#measure">Product</a></li>
+        <li><a class="mono" href="#photography">Photography</a></li>
+        <li><a class="mono" href="#contact">Contact</a></li>
       </ul>
+      <a class="chef-pill" href="https://app.sinthkitchens.com">Chef sign-in</a>
+    </nav>
+  </div>
+  <div class="tape-band tape-10"></div>
+</div>
+
+<header class="hero-frame">
+  <div class="hero wrap">
+    <h1>The kitchen stays loud. The craft stays human.</h1>
+    <p class="lede">We build the sensing and intelligence that let kitchen leaders trust what's happening in every service, in every room, without needing to be there. So their chefs are free to do the one thing only they can do: cook.</p>
+  </div>
+  <div class="image-band">
+    <img src="images/plan-chef-writing-menu.avif" alt="A chef writing a menu">
+  </div>
+  <div class="hero wrap hero-cta-wrap">
+    <a class="cta" href="#refuse">Read what we refuse ↓</a>
+  </div>
+</header>
+
+<hr class="rule">
+
+<section id="refuse">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>We refuse</h2>
+      <div class="eyebrow">The manifesto, in full</div>
     </div>
+    <div class="manifesto">
+      <p>We refuse the silent kitchen.</p>
+      <p>The pass that goes quiet, because there's nobody to call it anymore. The algorithm making a stock instead of a singing commis. "Efficiency" whispered instead of "BEHIND" yelled — and nobody notices, until silent becomes soulless.</p>
+      <p>That future is coming for kitchens the way it came for everything else — quietly, reasonably, one small convenience at a time.</p>
+      <p>We're not interested in being reasonable.</p>
+      <p>We believe the chef is the whole point. Not the obstacle to automate around. Not the variable to optimise out. The point.</p>
+      <p>Every system we build exists to keep the kitchen loud, to put more time, more trust, more craft back into their hands, never to take it from them. So we do the unglamorous thing. We build the full stack ourselves, because we won't hand the leverage over kitchens to people who've never worked a shift. We speak in the language of people, not products. We treat every chef we meet as already capable of excellence, not someone we're here to fix, but someone we're here to serve.</p>
+      <p>We hold ourselves to the standard of the rooms we most admire. <span class="aside">You've been earning your craft for years already, before we've earned the right to matter.</span> So we run like we're cooking for a Michelin table every single day, even when no one's watching, especially when no one's watching. We're protective of what we've built and outrageously generous within it. We prove ourselves where it's hardest first, because trust built in an easy room isn't trust at all.</p>
+      <p>We are not here to replace the hand that plates the food. We are here to stand behind it, so the kitchen never has to go quiet to survive.</p>
+      <p class="signoff">The kitchen stays loud. The craft stays human. The chef stays the hero of the story.</p>
+      <p>This is what we refuse to lose.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="rule">
+
+<section id="measure">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>What SINTH measures</h2>
+      <div class="eyebrow">The craft is the subject. The person never is.</div>
+    </div>
+    <div class="split">
+      <div class="split-col craft">
+        <div class="st">Measured</div>
+        <ul>
+          <li>Hands, technique, timing</li>
+          <li>Movement between station and pass</li>
+          <li>Ingredient handling, prep sequence</li>
+          <li>Where time is actually spent in a service</li>
+        </ul>
+      </div>
+      <div class="split-col">
+        <div class="st">Never measured</div>
+        <ul>
+          <li>Faces</li>
+          <li>Raw audio</li>
+          <li>Identity</li>
+          <li>Anything that isn't the craft itself</li>
+        </ul>
+      </div>
+    </div>
+    <div class="row">
+      <div class="label">Why it's built this way</div>
+      <div class="content">This isn't a compliance decision dressed up as a value. It's a legal protection, a social licence strategy and a product position at once — the same design choice serving all three, in every venue and every regulatory conversation, from day one.</div>
+    </div>
+  </div>
+</section>
+
+<hr class="rule">
+
+<section id="photography">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Photography</h2>
+      <div class="eyebrow">Hands and equipment, never faces</div>
+    </div>
+    <div class="photo-grid">
+      <div class="photo-block">
+        <img src="images/sensor-array-stainless-brigade.avif" alt="A stainless steel kitchen brigade line">
+      </div>
+      <div class="photo-block">
+        <img src="images/decide-analytics-moment.avif" alt="A moment of decision in a kitchen">
+      </div>
+    </div>
+    <div class="row">
+      <div class="label">The register</div>
+      <div class="content">Black and white, motion blur used deliberately — the visual register of a fast, loud kitchen, and the thing that keeps hands legible while a face stays soft. No posed, fully-identifiable "team at work" photography. This performs the same test as the data itself: does it measure the craft, or the person?</div>
+    </div>
+    <div class="row">
+      <div class="label">Sourcing</div>
+      <div class="content">Bespoke, commissioned SINTH photography is still an open item. These hold the register until it exists.</div>
+    </div>
+  </div>
+</section>
+
+<hr class="rule">
+
+<section class="statement">
+  <div class="wrap">
+    <h2>SINTH is the data behind the chef's hands.</h2>
+  </div>
+</section>
+
+<footer id="contact" class="wrap">
+  <hr class="rule">
+  <div class="foot-grid">
+    <span class="wordmark" style="font-size:15px;">SINTH</span>
+    <ul>
+      <li><a class="mono" href="#refuse">Manifesto</a></li>
+      <li><a class="mono" href="#measure">Product</a></li>
+      <li><a class="mono" href="#photography">Photography</a></li>
+      <li><a class="mono" href="https://app.sinthkitchens.com">Chef sign-in</a></li>
+    </ul>
   </div>
 </footer>
 
 <script>
-  // Subtle live-cycling field values — Spade-style
-  (function(){
-    const els = document.querySelectorAll('[data-cycle]');
-    els.forEach(el => {
-      const opts = el.getAttribute('data-cycle').split(',');
-      let i = 0;
-      setInterval(() => {
-        i = (i + 1) % opts.length;
-        el.textContent = opts[i];
-      }, 2200 + Math.random() * 1600);
-    });
-  })();
+(function(){
+  var bar = document.getElementById('tape-progress');
+  function update(){
+    var h = document.documentElement;
+    var scrollable = h.scrollHeight - h.clientHeight;
+    var pct = scrollable > 0 ? (h.scrollTop / scrollable) * 100 : 0;
+    bar.style.width = pct + '%';
+  }
+  document.addEventListener('scroll', update, {passive:true});
+  window.addEventListener('resize', update);
+  update();
+})();
 </script>
-
 </body>
 </html>
